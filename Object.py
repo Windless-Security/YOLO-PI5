@@ -47,14 +47,12 @@ while True:
                 (0, 255, 0),
                 2)
 
-    # Converteer naar BGR voor OpenCV
-    bgr_frame = cv2.cvtColor(result_frame, cv2.COLOR_RGB2BGR)
 
     # Toon beeld
-    cv2.imshow("Live YOLOv8 Detectie", bgr_frame)
+    cv2.imshow("Live YOLOv8 Detectie", result_frame)
 
     # Schrijf frame weg naar video
-    out.write(bgr_frame)
+    out.write(result_frame)
 
     # Stoppen met 'q'
     if cv2.waitKey(1) & 0xFF == ord("q"):
