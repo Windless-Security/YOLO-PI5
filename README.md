@@ -23,3 +23,8 @@ wget: kan host-adres '‘install.sh’' niet herleiden
 --2025-04-25 11:48:18--  http://./install.sh
 Herleiden van . (.)... mislukt: Aan hostnaam is geen adres verbonden.
 wget: kan host-adres '‘.’' niet herleiden
+
+
+
+git clone https://github.com/hailo-ai/hailo_model_zoo.git
+cd hailo_model_zoo
