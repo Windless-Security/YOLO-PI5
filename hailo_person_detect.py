@@ -1,30 +1,20 @@
 import cv2
 import numpy as np
 import time
-import csv
-from datetime import datetime
 from picamera2 import Picamera2
 from hailo_platform import HEF, VDevice, ConfigureParams, FormatType, InputVStreamParams, OutputVStreamParams, InferVStreams, HailoStreamInterface
 
-# 📁 Output CSV-bestand
-CSV_PATH = "person_detections.csv"
-
-# 📦 Pad naar je Hailo model
+# 📦 Modelpad
 HEF_PATH = "/usr/share/hailo-models/yolov5s_personface_h8l.hef"
 
-# 📷 Start de Pi-camera
+# 📷 Start Pi Camera
 picam2 = Picamera2()
 picam2.configure(picam2.create_preview_configuration(main={"size": (1280, 720)}))
 picam2.start()
 time.sleep(0.5)
 
-# 📑 Laad het model
+# 📑 Laad het Hailo model
 hef = HEF(HEF_PATH)
-
-# 📄 Start logging-bestand
-with open(CSV_PATH, mode='w', newline='') as file:
-    writer = csv.writer(file)
-    writer.writerow(['timestamp', 'label', 'confidence', 'x1', 'y1', 'x2', 'y2'])
 
 # 🧠 Start AI-inferentie
 with VDevice() as device:
@@ -40,6 +30,16 @@ with VDevice() as device:
         with InferVStreams(network_group, input_params, output_params) as infer_pipeline:
             print("🚀 AI-inferentie gestart. Druk op 'q' om te stoppen.")
 
+            # 📐 Resolutie bepalen op basis van modelinput
+            input_shape = input_infos[0].shape
+            if len(input_shape) == 4:
+                in_h, in_w = input_shape[2], input_shape[3]
+            elif len(input_shape) == 3:
+                in_h, in_w = input_shape[1], input_shape[2]
+            else:
+                print("⚠️ Onbekende input shape:", input_shape)
+                in_h, in_w = 320, 320
+
             while True:
                 try:
                     frame = picam2.capture_array()
@@ -47,38 +47,17 @@ with VDevice() as device:
                     print(f"❌ Fout bij lezen van camera: {e}")
                     break
 
-                input_shape = input_infos[0].shape
-                resized = cv2.resize(frame, (input_shape[3], input_shape[2]))
+                # 📊 Preprocessing
+                resized = cv2.resize(frame, (in_w, in_h))
                 normalized = resized.astype(np.float32) / 255.0
                 input_tensor = np.expand_dims(np.transpose(normalized, (2, 0, 1)), axis=0)
                 input_data = {input_infos[0].name: input_tensor}
 
-                # 🔍 Inferentie uitvoeren
-                results = infer_pipeline.infer(input_data)
-                output_data = results[output_infos[0].name]
+                # 🔄 Inference uitvoeren
+                _ = infer_pipeline.infer(input_data)
 
-                # 🔧 Parse detections (voor nu: fictieve data als voorbeeld)
-                # LET OP: je moet dit vervangen met jouw echte outputstructuur!
-                # Simulatie: [label, confidence, x1, y1, x2, y2]
-                detecties = fake_parse_detections(output_data)
-
-                # ✏️ Log & visualiseer alleen 'person'
-                for det in detecties:
-                    if det['label'] == 'person':
-                        x1, y1, x2, y2 = map(int, det['bbox'])
-                        conf = det['confidence']
-                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                        cv2.putText(frame, f"{det['label']} {conf:.2f}", (x1, y1 - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
-                        with open(CSV_PATH, mode='a', newline='') as file:
-                            writer = csv.writer(file)
-                            writer.writerow([
-                                datetime.now().isoformat(),
-                                det['label'], conf, x1, y1, x2, y2
-                            ])
-
-                cv2.imshow("Personen Detectie", frame)
+                # 🎥 Toon alleen live video
+                cv2.imshow("Live Video (zonder verwerking)", frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
