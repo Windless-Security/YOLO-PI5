@@ -1,12 +1,12 @@
 import cv2
 import numpy as np
-from hailo_platform import HEF, VDevice, ConfigureParams, FormatType, InputVStreamParams, OutputVStreamParams, InferVStreams
+from hailo_platform import HEF, VDevice, ConfigureParams, FormatType, InputVStreamParams, OutputVStreamParams, InferVStreams, HailoStreamInterface
 
 # Pad naar je HEF-bestand
-HEF_PATH = "/home/pi/models/yolov5_personface.hef"
+HEF_PATH = "/usr/share/hailo-models/yolov5s_personface_h8l.hef"
 
 # Open de webcam
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture("libcamerasrc ! videoconvert ! appsink". cv2.CAP_GSTREAMER)
 if not cap.isOpened():
     print("❌ Kan de camera niet openen.")
     exit()
@@ -16,7 +16,7 @@ hef = HEF(HEF_PATH)
 
 # Configureer het apparaat
 with VDevice() as device:
-    configure_params = ConfigureParams.create_from_hef(hef)
+    configure_params = ConfigureParams.create_from_hef(hef, HailoStreamInterface.PCIe)
     network_group = device.configure(hef, configure_params)[0]
     input_infos = hef.get_input_vstream_infos()
     output_infos = hef.get_output_vstream_infos()
