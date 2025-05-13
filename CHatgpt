@@ -1,2 +1,5 @@
-chmod +x drone_ai.sh
-./drone_ai.sh
+hailort-apps run \
+  --hef /usr/share/hailo-models/yolov5s_personface_h8l.hef \
+  --video-source libcamera \
+  --output-display \
+  --post-process yolov5
