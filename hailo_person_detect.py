@@ -8,19 +8,15 @@ from hailo_platform import (
     InferVStreams, HailoStreamInterface
 )
 
-# 📦 Pad naar jouw .hef model
 HEF_PATH = "/usr/share/hailo-models/yolov5s_personface_h8l.hef"
 
-# 📷 Start Pi Camera
 picam2 = Picamera2()
 picam2.configure(picam2.create_preview_configuration(main={"size": (1280, 720)}))
 picam2.start()
-time.sleep(0.5)  # Wacht tot camera is opgestart
+time.sleep(0.5)
 
-# 📑 Laad het Hailo-model
 hef = HEF(HEF_PATH)
 
-# 🧠 Start AI-inferentie
 with VDevice() as device:
     configure_params = ConfigureParams.create_from_hef(hef, HailoStreamInterface.PCIe)
     network_group = device.configure(hef, configure_params)[0]
@@ -34,9 +30,17 @@ with VDevice() as device:
         network_group, quantized=False, format_type=FormatType.FLOAT32
     )
 
+    # 📐 Model input shape ophalen
     input_name = input_infos[0].name
-    in_h, in_w = 640, 640  # ✅ Verplicht formaat voor yolov5s_personface
-    expected_dtype = np.float32
+    model_shape = input_infos[0].shape  # [1, 3, 640, 640]
+    print("📐 Model verwacht shape:", model_shape)
+
+    if len(model_shape) != 4:
+        raise RuntimeError("❌ Modelinputvorm is niet 4D!")
+
+    batch, channels, in_h, in_w = model_shape
+    expected_size = batch * channels * in_h * in_w
+    print(f"✅ Modelinput verwacht {expected_size} elementen.")
 
     with network_group.activate():
         with InferVStreams(network_group, input_params, output_params) as infer_pipeline:
@@ -49,26 +53,31 @@ with VDevice() as device:
                     print(f"❌ Fout bij lezen van camera: {e}")
                     break
 
-                # ✅ Preprocessing: resize → normalize → transpose → expand → dtype + contig
+                # 🧼 Preprocessing exact zoals model verwacht
                 resized = cv2.resize(frame, (in_w, in_h))
                 normalized = resized.astype(np.float32) / 255.0
-                chw = np.transpose(normalized, (2, 0, 1))            # HWC → CHW
-                chw = np.expand_dims(chw, axis=0)                    # Voeg batchdimensie toe
-                chw = np.ascontiguousarray(chw, dtype=expected_dtype)
+                chw = np.transpose(normalized, (2, 0, 1))         # HWC → CHW
+                chw = np.expand_dims(chw, axis=0)                 # [1, 3, H, W]
+                chw = np.ascontiguousarray(chw, dtype=np.float32)
+
+                print("🧪 Inputvorm:", chw.shape)
+                print("🔢 Totale elementen:", chw.size)
+
+                if chw.size != expected_size:
+                    print(f"❌ Mismatch! Verwacht {expected_size}, maar kreeg {chw.size}")
+                    break
 
                 input_data = {input_name: chw}
 
                 try:
-                    _ = infer_pipeline.infer(input_data)  # Output genegeerd
+                    _ = infer_pipeline.infer(input_data)
                 except Exception as e:
                     print(f"❌ Fout bij inferentie: {e}")
                     break
 
-                # 📺 Toon het originele camerabeeld (zonder bounding boxes)
-                cv2.imshow("Live feed (AI draait)", frame)
+                cv2.imshow("Live beeld (AI actief)", frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
-# 🧹 Opruimen
 picam2.stop()
 cv2.destroyAllWindows()
