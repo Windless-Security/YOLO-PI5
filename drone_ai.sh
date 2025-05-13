@@ -1,19 +1,13 @@
 #!/bin/bash
 
-# 📍 Modelpaden
-HEF_PATH="$HOME/models/yolov5_vehicle_person.hef"
-JSON_PATH="$HOME/models/hailo_yolov5_vehicle_person.json"
+HEF_PATH="/usr/share/rpi-camera-assets/yolov5_personface.hef"
+JSON_PATH="/usr/share/rpi-camera-assets/hailo_yolov5_personface.json"
 
-# 🧠 Output logbestand
-LOG_PATH="$HOME/models/detections.csv"
-
-# ✅ Check bestanden
 if [[ ! -f "$HEF_PATH" || ! -f "$JSON_PATH" ]]; then
   echo "❌ Modelbestanden niet gevonden!"
   exit 1
 fi
 
-# ❇️ Start Hailo AI detectie met rpicam
 echo "🚁 Drone AI Detectie gestart..."
 
 rpicam-hello \
@@ -24,7 +18,5 @@ rpicam-hello \
   --width 1280 \
   --height 720 \
   --framerate 30 \
-  --annotate 1 \
-  --annotate-file "$LOG_PATH" \
   --fullscreen \
   -t 0
