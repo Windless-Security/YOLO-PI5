@@ -8,9 +8,7 @@ model = YOLO("best.pt")
 
 # Start PiCamera2
 picam2 = Picamera2()
-picam2.preview_configuration.main.size = (1280, 720)
-picam2.preview_configuration.main.format = "RGB888"
-picam2.configure("preview")
+picam2.configure(picam2.create_preview_configuration(main={"size": (1280, 720), "format": "RGB888"}))
 picam2.start()
 
 # Video-opname instellen
@@ -24,41 +22,41 @@ print("Druk op 'q' om te stoppen")
 # Voor FPS-berekening
 prev_time = time.time()
 
-while True:
-    frame = picam2.capture_array()
+try:
+    while True:
+        frame = picam2.capture_array()
 
-    # YOLO verwacht RGB input
-    results = model(frame, conf=0.4, imgsz=640)
+        # YOLO verwacht RGB input
+        results = model(frame, conf=0.4, imgsz=640)
 
-    # Teken bounding boxes
-    result_frame = results[0].plot()
+        # Teken bounding boxes
+        result_frame = results[0].plot()
 
-    # Bereken FPS
-    curr_time = time.time()
-    fps = 1 / (curr_time - prev_time)
-    prev_time = curr_time
+        # Bereken FPS
+        curr_time = time.time()
+        fps = 1 / (curr_time - prev_time)
+        prev_time = curr_time
 
-    # Voeg FPS-tekst toe
-    cv2.putText(result_frame,
-                f"FPS: {fps:.2f}",
-                (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1,
-                (0, 255, 0),
-                2)
+        # Voeg FPS-tekst toe
+        cv2.putText(result_frame,
+                    f"FPS: {fps:.2f}",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    1,
+                    (0, 255, 0),
+                    2)
 
+        # Toon beeld
+        cv2.imshow("Live YOLOv8 Detectie", result_frame)
 
-    # Toon beeld
-    cv2.imshow("Live YOLOv8 Detectie", result_frame)
+        # Schrijf frame weg naar video
+        out.write(result_frame)
 
-    # Schrijf frame weg naar video
-    out.write(result_frame)
-
-    # Stoppen met 'q'
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
-
-# Opruimen
-cv2.destroyAllWindows()
-out.release()
-picam2.close()
+        # Stoppen met 'q'
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
+finally:
+    print("Afsluiten...")
+    cv2.destroyAllWindows()
+    out.release()
+    picam2.stop()
