@@ -1,54 +1,57 @@
-import cv2
-import numpy as np
-from hailo import HailoDevice, HEF, InferModel, VStreamsParams
+import subprocess
+import csv
+import datetime
+import os
 
-# Pad naar het voorgecompileerde YOLOv8-model
-HEF_PATH = "/usr/share/rpi-camera-assets/hailo_yolov8_inference.hef"
+LOG_FILE = "hailo_detections_log.csv"
 
-# Alleen deze klassen tonen (controleer class IDs in jouw model!)
-TARGET_CLASSES = {0: 'person', 2: 'car', 5: 'bus', 7: 'truck'}
+# Zorg dat logbestand bestaat met headers
+if not os.path.exists(LOG_FILE):
+    with open(LOG_FILE, mode='w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['timestamp', 'class', 'confidence', 'x1', 'y1', 'x2', 'y2'])
 
-# Initialiseer camera
-cap = cv2.VideoCapture(0)
-cap.set(cv2.CAP_PROP_FPS, 30)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+# Start de pipeline en vang stdout op
+process = subprocess.Popen(
+    [
+        "rpicam-hello",
+        "-t", "0",
+        "--post-process-file", "/usr/share/rpi-camera-assets/hailo_yolov8_inference.json"
+    ],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True
+)
 
-# Start Hailo device
-with HailoDevice() as device:
-    hef = HEF(HEF_PATH)
-    vstreams_params = VStreamsParams.from_hef(hef, key="yolov8")  # Let op: sleutel moet kloppen met je model
-    with InferModel(device, hef, vstreams_params) as model:
-        print("🚀 Detectie gestart - druk op Q om te stoppen.")
+print("⏺️ Pipeline gestart — loggen naar hailo_detections_log.csv")
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+for line in process.stdout:
+    # Zoek naar detectieregels (voorbeeldformaat afhankelijk van JSON)
+    if "Detected object" in line and "class" in line:
+        # Voorbeeldregel: Detected object: class=person conf=0.91 x1=0.25 y1=0.30 x2=0.45 y2=0.65
+        parts = line.strip().split()
+        data = {
+            "class": parts[2].split("=")[1],
+            "confidence": float(parts[3].split("=")[1]),
+            "x1": float(parts[4].split("=")[1]),
+            "y1": float(parts[5].split("=")[1]),
+            "x2": float(parts[6].split("=")[1]),
+            "y2": float(parts[7].split("=")[1]),
+        }
 
-            resized = cv2.resize(frame, (640, 640))
-            rgb_frame = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        timestamp = datetime.datetime.now().isoformat()
 
-            # Run inference
-            results = model.infer(rgb_frame)
+        # Log naar CSV
+        with open(LOG_FILE, mode='a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                timestamp,
+                data["class"],
+                data["confidence"],
+                data["x1"],
+                data["y1"],
+                data["x2"],
+                data["y2"],
+            ])
 
-            # Resultaten verwerken — afhankelijk van jouw postprocessing output
-            for detection in results[0]:
-                class_id, conf, x1, y1, x2, y2 = detection
-                if int(class_id) in TARGET_CLASSES and conf > 0.4:
-                    h, w, _ = frame.shape
-                    x1 = int(x1 * w)
-                    y1 = int(y1 * h)
-                    x2 = int(x2 * w)
-                    y2 = int(y2 * h)
-                    label = f"{TARGET_CLASSES[int(class_id)]} {conf:.2f}"
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(frame, label, (x1, y1 - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-
-            cv2.imshow("Drone AI Detectie", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-cap.release()
-cv2.destroyAllWindows()
+        print(f"➡️ {data['class']} ({data['confidence']:.2f}) logged.")
